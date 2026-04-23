@@ -45,21 +45,47 @@ jobs:
         run: |
           cargo build --release -p "$SKILL_NAME" --target ${{ matrix.rust_target }}
 
+      - name: Generate artifact.json
+        shell: bash
+        run: |
+          cat > skills/$SKILL_NAME/artifact.json << EOF
+          {
+            "kind": "skill_binary",
+            "id": "$SKILL_NAME",
+            "version": "$SKILL_VERSION",
+            "entry_binary": "$SKILL_NAME",
+            "target": "${{ matrix.target }}",
+            "download": {
+              "repo": "lhwzds/restflow-skills",
+              "tag": "$GITHUB_REF_NAME",
+              "asset": "$SKILL_NAME-${{ matrix.target }}.tar.gz"
+            }
+          }
+          EOF
+
       - name: Package artifact (Unix)
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          cd target/${{ matrix.rust_target }}/release
-          tar czf /tmp/${SKILL_NAME}-${{ matrix.target }}.tar.gz ${SKILL_NAME}
-          echo "ASSET=/tmp/${SKILL_NAME}-${{ matrix.target }}.tar.gz" >> "$GITHUB_ENV"
+          mkdir -p /tmp/package
+          cp target/${{ matrix.rust_target }}/release/$SKILL_NAME /tmp/package/
+          cp skills/$SKILL_NAME/SKILL.md /tmp/package/
+          cp skills/$SKILL_NAME/artifact.json /tmp/package/
+          cd /tmp/package
+          tar czf /tmp/$SKILL_NAME-${{ matrix.target }}.tar.gz $SKILL_NAME SKILL.md artifact.json
+          echo "ASSET=/tmp/$SKILL_NAME-${{ matrix.target }}.tar.gz" >> "$GITHUB_ENV"
 
       - name: Package artifact (Windows)
         if: runner.os == 'Windows'
         shell: bash
         run: |
-          cd target/${{ matrix.rust_target }}/release
-          7z a /tmp/${SKILL_NAME}-${{ matrix.target }}.zip ${SKILL_NAME}.exe
-          echo "ASSET=/tmp/${SKILL_NAME}-${{ matrix.target }}.zip" >> "$GITHUB_ENV"
+          mkdir -p /tmp/package
+          cp target/${{ matrix.rust_target }}/release/$SKILL_NAME.exe /tmp/package/
+          cp skills/$SKILL_NAME/SKILL.md /tmp/package/
+          cp skills/$SKILL_NAME/artifact.json /tmp/package/
+          cd /tmp/package
+          7z a /tmp/$SKILL_NAME-${{ matrix.target }}.zip $SKILL_NAME.exe SKILL.md artifact.json
+          echo "ASSET=/tmp/$SKILL_NAME-${{ matrix.target }}.zip" >> "$GITHUB_ENV"
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
@@ -70,15 +96,36 @@ jobs:
           body: |
             ## ${{ env.SKILL_NAME }} ${{ env.SKILL_VERSION }}
 
-            **Platforms:**
-            - `aarch64-macos` (Apple Silicon)
-            - `x86_64-linux`
-            - `x86_64-windows`
+            ### Platforms
+            | Platform | Asset |
+            |----------|-------|
+            | macOS (Apple Silicon) | `${{ env.SKILL_NAME }}-aarch64-macos.tar.gz` |
+            | Linux (x86_64) | `${{ env.SKILL_NAME }}-x86_64-linux.tar.gz` |
+            | Windows (x86_64) | `${{ env.SKILL_NAME }}-x86_64-windows.zip` |
 
-            **Install:**
+            ### Install (one command)
             ```bash
-            # Download and extract
-            curl -L https://github.com/lhwzds/restflow-skills/releases/download/${{ github.ref_name }}/${{ env.SKILL_NAME }}-aarch64-macos.tar.gz | tar xz
-            chmod +x ${{ env.SKILL_NAME }}
-            mv ${{ env.SKILL_NAME }} ~/.restflow/skills/${{ env.SKILL_NAME }}/bin/
+            # macOS / Linux
+            mkdir -p ~/.restflow/skills/${{ env.SKILL_NAME }}
+            curl -L https://github.com/lhwzds/restflow-skills/releases/download/${{ github.ref_name }}/${{ env.SKILL_NAME }}-$(uname -s | tr '[:upper:]' '[:lower:]' | sed 's/darwin/macos/' | sed 's/x86_64/x86_64/' | sed 's/aarch64/aarch64/')-$(uname -s | tr '[:upper:]' '[:lower:]' | sed 's/darwin/macos/').tar.gz | tar xz -C ~/.restflow/skills/${{ env.SKILL_NAME }}
+            chmod +x ~/.restflow/skills/${{ env.SKILL_NAME }}/${{ env.SKILL_NAME }}
+            ```
+
+            ```powershell
+            # Windows PowerShell
+            mkdir -p ~/.restflow/skills/${{ env.SKILL_NAME }}
+            Invoke-WebRequest -Uri "https://github.com/lhwzds/restflow-skills/releases/download/${{ github.ref_name }}/${{ env.SKILL_NAME }}-x86_64-windows.zip" -OutFile "${{ env.SKILL_NAME }}.zip"
+            Expand-Archive ${{ env.SKILL_NAME }}.zip -DestinationPath ~/.restflow/skills/${{ env.SKILL_NAME }}
+            ```
+
+            ### What's inside
+            Each archive contains:
+            - `${{ env.SKILL_NAME }}` — the binary
+            - `SKILL.md` — documentation and usage
+            - `artifact.json` — metadata for tooling
+
+            ### Quick test
+            ```bash
+            ./{{ env.SKILL_NAME }} --help
+            echo '{"action":"status"}' | ./${{ env.SKILL_NAME }}
             ```

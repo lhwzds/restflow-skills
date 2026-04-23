@@ -1,6 +1,6 @@
 # RestFlow Binary Skills
 
-Pre-compiled Rust tools for LLM agents and automation frameworks. Each skill is a standalone binary that communicates via **JSON stdin/stdout** — no SDK, no runtime dependency, works with any agent that can spawn a process.
+Pre-compiled Rust tools for **any LLM agent or automation framework**. Each skill is a standalone binary that communicates via **JSON stdin/stdout** — no SDK, no runtime dependency, works with anything that can spawn a process.
 
 ## Why Binary Skills?
 
@@ -12,7 +12,8 @@ Most LLM agent tools are Python libraries or Node packages. That means:
 Binary skills solve this:
 - **Zero dependencies** — single static binary, just download and run
 - **Universal protocol** — JSON in, JSON out via stdin/stdout
-- **Any agent can use it** — RestFlow, Claude Code, OpenAI Codex, LangChain, AutoGPT, shell scripts, anything that can run a command
+- **Works everywhere** — macOS, Linux, Windows
+- **Any agent can use it** — RestFlow, Claude Code, OpenAI Codex, LangChain, AutoGPT, CrewAI, shell scripts, cron jobs, anything
 
 ## Available Skills
 
@@ -21,268 +22,230 @@ Binary skills solve this:
 | [cdp-browser](#cdp-browser) | Control Chrome through CDP — navigate, click, type, evaluate JS, screenshot | 0.1.0 |
 | [regex-finder](#regex-finder) | Match text against regex patterns, return structured JSON | 0.1.0 |
 
-## Quick Start
+## Install
 
-### Download
+### One-liner (macOS / Linux)
 
 ```bash
-# macOS (Apple Silicon)
-curl -L https://github.com/lhwzds/restflow-skills/releases/latest/download/cdp-browser-aarch64-macos.tar.gz | tar xz
-
-# Linux (x86_64)
-curl -L https://github.com/lhwzds/restflow-skills/releases/latest/download/cdp-browser-x86_64-linux.tar.gz | tar xz
-
-# Or download a specific version
-curl -L https://github.com/lhwzds/restflow-skills/releases/download/cdp-browser@0.1.0/cdp-browser-aarch64-macos.tar.gz | tar xz
+# Download latest cdp-browser
+mkdir -p ~/.local/bin
+curl -L https://github.com/lhwzds/restflow-skills/releases/latest/download/cdp-browser-aarch64-macos.tar.gz | tar xz -C ~/.local/bin
+chmod +x ~/.local/bin/cdp-browser
 ```
 
-### Run
+### Specify version
+
+```bash
+curl -L https://github.com/lhwzds/restflow-skills/releases/download/cdp-browser@0.1.0/cdp-browser-aarch64-macos.tar.gz | tar xz -C ~/.local/bin
+```
+
+### What's inside each archive
+
+```
+cdp-browser-aarch64-macos.tar.gz
+├── cdp-browser       ← the binary
+├── SKILL.md          ← documentation & usage reference
+└── artifact.json     ← metadata for tooling integration
+```
+
+## Usage
 
 Every skill supports two modes:
 
-**CLI mode** — pass arguments directly:
+### CLI Mode
+
+Pass arguments directly:
+
 ```bash
 ./cdp-browser launch --port 9222
 ./cdp-browser open --port 9222 --url https://example.com
+./regex-finder --pattern "foo.*bar" --text "foo test bar"
 ```
 
-**JSON mode** — pipe JSON to stdin (ideal for agents):
+### JSON Mode (for agents)
+
+Pipe JSON to stdin, get JSON from stdout:
+
 ```bash
 echo '{"action":"open","port":9222,"url":"https://example.com"}' | ./cdp-browser
-# → {"ok":true,"action":"open","data":{"target_id":"...","url":"https://example.com/"}}
-```
+# → {"ok":true,"action":"open","target_id":"ABC","url":"https://example.com/"}
 
----
-
-## Skill Reference
-
-### cdp-browser
-
-Control Chrome through the Chrome DevTools Protocol (CDP).
-
-**Actions:**
-
-| Action | Description | Required Fields |
-|--------|-------------|-----------------|
-| `launch` | Start Chrome with CDP enabled | `port` |
-| `status` | Check if CDP is reachable | `port` |
-| `open` | Open URL in a new tab | `port`, `url` |
-| `list` | List all open tabs | `port` |
-| `eval` | Run JavaScript in a tab | `port`, `expression` |
-| `click` | Click an element by CSS selector | `port`, `selector` |
-| `type` | Type text into an element | `port`, `selector`, `text` |
-| `screenshot` | Capture tab to PNG | `port`, `path` |
-
-**Examples:**
-
-```bash
-# Launch Chrome
-./cdp-browser launch --port 9222
-
-# Open a page (CLI)
-./cdp-browser open --port 9222 --url https://example.com
-
-# Open a page (JSON)
-echo '{"action":"open","port":9222,"url":"https://example.com"}' | ./cdp-browser
-
-# Get page title
-echo '{"action":"eval","port":9222,"expression":"document.title"}' | ./cdp-browser
-
-# Click a button
-echo '{"action":"click","port":9222,"selector":"#submit-btn"}' | ./cdp-browser
-
-# Type into search box
-echo '{"action":"type","port":9222,"selector":"input[name=q]","text":"RestFlow"}' | ./cdp-browser
-
-# Screenshot
-echo '{"action":"screenshot","port":9222,"path":"/tmp/page.png"}' | ./cdp-browser
-
-# List tabs
-echo '{"action":"list","port":9222}' | ./cdp-browser
-```
-
-**Output format:**
-```json
-{
-  "ok": true,
-  "action": "open",
-  "message": null,
-  "data": {
-    "target_id": "ABC123",
-    "url": "https://example.com/",
-    "title": "Example Domain"
-  }
-}
-```
-
----
-
-### regex-finder
-
-Match text against a regex pattern and return whether it matches.
-
-**Input:**
-```json
-{
-  "pattern": "foo.*bar",
-  "text": "foo test bar"
-}
-```
-
-**Output:**
-```json
-{
-  "ok": true,
-  "matched": true
-}
-```
-
-**CLI:**
-```bash
-echo '{"pattern":"\\d+","text":"abc123"}' | ./regex-finder
+echo '{"pattern":"foo.*bar","text":"foo test bar"}' | ./regex-finder
 # → {"ok":true,"matched":true}
 ```
-
----
 
 ## Integration Guides
 
 ### RestFlow
 
-Binary skills are natively supported. Place the binary under `~/.restflow/skills/{skill-name}/bin/` with a `SKILL.md`:
-
-```
-~/.restflow/skills/cdp-browser/
-├── bin/
-│   └── cdp-browser          ← the binary
-└── SKILL.md                 ← metadata
-```
-
-RestFlow agents can then invoke the skill directly via the `skill` tool.
-
-### Claude Code / Codex CLI
-
-Use as a bash tool in your agent session:
+Add to `~/.restflow/skills/`:
 
 ```bash
-# In your agent's shell
-./cdp-browser launch --port 9222
-echo '{"action":"open","port":9222,"url":"https://news.ycombinator.com"}' | ./cdp-browser
-echo '{"action":"eval","port":9222,"expression":"[...document.querySelectorAll('\''.titleline a'\'')].map(a=>a.textContent).join('\''\\n'\'')"}'\ | ./cdp-browser
+mkdir -p ~/.restflow/skills/cdp-browser
+curl -L https://github.com/lhwzds/restflow-skills/releases/latest/download/cdp-browser-aarch64-macos.tar.gz | tar xz -C ~/.restflow/skills/cdp-browser
+chmod +x ~/.restflow/skills/cdp-browser/cdp-browser
 ```
 
-### LangChain / Python Agents
+Then reference in agent config:
+
+```json
+{
+  "skills": ["cdp-browser"],
+  "tools": ["bash"]
+}
+```
+
+### Claude Code / OpenAI Codex / Any CLI Agent
+
+These agents can run shell commands. Just download the binary and invoke it:
+
+```bash
+# In your agent's tool call:
+# Tool: bash
+# Command: echo '{"action":"eval","port":9222,"expression":"document.title"}' | /path/to/cdp-browser
+```
+
+### LangChain / Python
 
 ```python
 import subprocess, json
 
-def call_skill(binary_path: str, input_dict: dict) -> dict:
+def call_skill(binary_path: str, payload: dict) -> dict:
     result = subprocess.run(
         [binary_path],
-        input=json.dumps(input_dict),
+        input=json.dumps(payload),
         capture_output=True,
-        text=True,
-        timeout=30
+        text=True
     )
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr)
     return json.loads(result.stdout)
 
-# Example: open a page and get the title
-call_skill("./cdp-browser", {"action": "launch", "port": 9222})
-call_skill("./cdp-browser", {"action": "open", "port": 9222, "url": "https://example.com"})
-title = call_skill("./cdp-browser", {"action": "eval", "port": 9222, "expression": "document.title"})
-print(title)  # {"ok": true, "action": "eval", "data": {"result": "Example Domain"}}
+# Example: regex match
+out = call_skill("./regex-finder", {"pattern": r"\d+", "text": "abc 123"})
+print(out)  # {"ok": true, "matched": true}
+
+# Example: open a browser page
+out = call_skill("./cdp-browser", {"action": "open", "port": 9222, "url": "https://example.com"})
+print(out)  # {"ok": true, "action": "open", "target_id": "ABC", ...}
 ```
 
-### OpenAI Function Calling
+### Node.js / TypeScript
 
-Define as a function tool:
+```typescript
+import { execFileSync } from "child_process";
 
-```json
-{
-  "name": "cdp_browser",
-  "description": "Control Chrome browser via CDP protocol",
-  "parameters": {
-    "type": "object",
-    "properties": {
-      "action": {"type": "string", "enum": ["launch","status","open","list","eval","click","type","screenshot"]},
-      "port": {"type": "integer", "default": 9222},
-      "url": {"type": "string"},
-      "selector": {"type": "string"},
-      "text": {"type": "string"},
-      "expression": {"type": "string"},
-      "path": {"type": "string"}
-    },
-    "required": ["action"]
-  }
+function callSkill(binaryPath: string, payload: object): object {
+  const result = execFileSync(binaryPath, [], {
+    input: JSON.stringify(payload),
+    encoding: "utf-8",
+  });
+  return JSON.parse(result);
 }
+
+// Example
+const out = callSkill("./cdp-browser", {
+  action: "screenshot",
+  port: 9222,
+  path: "/tmp/screenshot.png",
+});
+console.log(out); // { ok: true, path: "/tmp/screenshot.png", size: 44321 }
 ```
 
-Then in your tool executor:
-```python
-result = subprocess.run(["./cdp-browser"], input=json.dumps(args), capture_output=True, text=True)
-```
-
-### Shell Scripts
+### Shell Scripts / Cron
 
 ```bash
 #!/bin/bash
-CDP="./cdp-browser"
+RESULT=$(echo '{"pattern":"error.*failed","text":"some log line"}' | ./regex-finder)
+MATCHED=$(echo "$RESULT" | jq -r '.matched')
+if [ "$MATCHED" = "true" ]; then
+  echo "Alert: error found"
+fi
+```
 
-# Launch and open a page
-$CDP launch --port 9222
-sleep 2
-$CDP open --port 9222 --url https://example.com
+### Any Other Agent
 
-# Extract data
-TITLE=$(echo '{"action":"eval","port":9222,"expression":"document.title"}' | $CDP)
-echo "Page title: $TITLE"
+The protocol is simple:
+
+```
+┌────────────┐     JSON      ┌──────────────┐     JSON      ┌────────────┐
+│  Any Agent  │ ─────────────→│  Binary Skill │────────────→│  Any Agent  │
+│             │    stdin       │              │    stdout     │             │
+└────────────┘                └──────────────┘                └────────────┘
+```
+
+1. Spawn the binary as a subprocess
+2. Write a JSON object to its stdin, then close stdin
+3. Read one JSON object from its stdout
+4. Exit code 0 = success, non-zero = error (details on stderr)
+
+That's it. No HTTP server, no socket, no API key. Just process I/O.
+
+## Skill Details
+
+### cdp-browser
+
+Control Chrome through the Chrome DevTools Protocol.
+
+**Actions:** `launch`, `status`, `open`, `list`, `eval`, `click`, `type`, `screenshot`
+
+```bash
+# Start Chrome
+echo '{"action":"launch","port":9222}' | ./cdp-browser
+
+# Navigate
+echo '{"action":"open","port":9222,"url":"https://example.com"}' | ./cdp-browser
+
+# Click
+echo '{"action":"click","port":9222,"selector":"a.more"}' | ./cdp-browser
+
+# Type
+echo '{"action":"type","port":9222,"selector":"input[name=q]","text":"hello"}' | ./cdp-browser
+
+# Evaluate JS
+echo '{"action":"eval","port":9222,"expression":"document.title"}' | ./cdp-browser
 
 # Screenshot
-$CDP screenshot --port 9222 --path /tmp/example.png
+echo '{"action":"screenshot","port":9222,"path":"/tmp/shot.png"}' | ./cdp-browser
 ```
 
----
+### regex-finder
 
-## Release Convention
+Match text against regex patterns using Rust's `regex` crate.
 
-Each skill is released independently using tags in the format `skill-name@version`:
-
-```
-cdp-browser@0.1.0
-cdp-browser@0.2.0
-regex-finder@1.0.0
+```bash
+echo '{"pattern":"\\d+","text":"abc 123 def"}' | ./regex-finder
+# → {"ok":true,"matched":true}
 ```
 
-### Assets per Release
-
-| Platform | File |
-|----------|------|
-| macOS (Apple Silicon) | `skill-name-aarch64-macos.tar.gz` |
-| Linux (x86_64) | `skill-name-x86_64-linux.tar.gz` |
-| Windows (x86_64) | `skill-name-x86_64-windows.zip` |
-
----
-
-## Develop
+## Development
 
 ### Prerequisites
 
-- Rust 1.75+
-- Chrome (for cdp-browser testing)
+- Rust 1.70+
+- Cargo
 
-### Build
+### Build all skills
 
 ```bash
-# Build all skills
 cargo build --workspace --release
+```
 
-# Build a specific skill
+### Build a specific skill
+
+```bash
 cargo build --release -p cdp-browser
+```
 
-# Test
+### Test
+
+```bash
 cargo test --workspace
+```
 
-# Lint
+### Lint
+
+```bash
 cargo clippy --workspace -- -D warnings
 ```
 
@@ -307,27 +270,7 @@ cargo clippy --workspace -- -D warnings
    git push origin main --tags
    ```
 
-4. CI automatically builds and publishes binaries for all platforms.
-
-### Skill Binary Protocol
-
-Every binary skill follows the same convention:
-
-```
-┌────────────┐     JSON      ┌──────────────┐     JSON      ┌────────────┐
-│  Any Agent  │ ─────────────→│  Binary Skill │────────────→│  Any Agent  │
-│             │    stdin       │              │    stdout     │             │
-└────────────┘                └──────────────┘                └────────────┘
-```
-
-**Rules:**
-1. Read entire stdin as a JSON object
-2. Process the request
-3. Write exactly one JSON object to stdout
-4. Exit with code 0 on success, non-zero on error
-5. Errors go to stderr as plain text
-
-This protocol is deliberately simple so any language, any framework, any agent can integrate.
+4. CI automatically builds and publishes binaries for macOS, Linux, and Windows. Each archive includes the binary + `SKILL.md` + `artifact.json`.
 
 ## License
 
