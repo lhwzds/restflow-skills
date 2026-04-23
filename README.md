@@ -163,24 +163,6 @@ if [ "$MATCHED" = "true" ]; then
 fi
 ```
 
-### Any Other Agent
-
-The protocol is simple:
-
-```
-┌────────────┐     JSON      ┌──────────────┐     JSON      ┌────────────┐
-│  Any Agent  │ ─────────────→│  Binary Skill │────────────→│  Any Agent  │
-│             │    stdin       │              │    stdout     │             │
-└────────────┘                └──────────────┘                └────────────┘
-```
-
-1. Spawn the binary as a subprocess
-2. Write a JSON object to its stdin, then close stdin
-3. Read one JSON object from its stdout
-4. Exit code 0 = success, non-zero = error (details on stderr)
-
-That's it. No HTTP server, no socket, no API key. Just process I/O.
-
 ## Skill Details
 
 ### cdp-browser
